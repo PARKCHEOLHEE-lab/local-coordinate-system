@@ -4,8 +4,9 @@ import numpy as np
 from typing import Tuple
 from matplotlib.textpath import TextPath
 from shapely.geometry import GeometryCollection
-from shapely.geometry import Polygon, LineString, Point, MultiLineString
+from shapely.geometry import Polygon, LineString
 from shapely import ops, affinity, wkt
+
 from debugvisualizer.debugvisualizer import Plotter
 
 
@@ -13,7 +14,7 @@ class AxesVisualizer:
     def __init__(self):
         pass
     
-    def _get_text_polygon(self, text: str, font_size: float = 1.0, position: Tuple[float] = (0, 0)):
+    def _get_polygonized_text(self, text: str, font_size: float = 1.0, position: Tuple[float] = (0, 0)):
         tp = TextPath(position, text, size=font_size)
 
         vertices = tp.to_polygons()
@@ -27,11 +28,11 @@ class AxesVisualizer:
             return polygons[0]
         
     def _get_axes_geometries(self, font_size: float, x_degree: float, y_degree: float):
-        origin_text = self._get_text_polygon(text="O", font_size=font_size)
+        origin_text = self._get_polygonized_text(text="O", font_size=font_size)
         origin_text = origin_text - origin_text.buffer(-font_size / 10)
         
-        x_axis_text = self._get_text_polygon(text="X", font_size=font_size)
-        y_axis_text = self._get_text_polygon(text="Y", font_size=font_size)
+        x_axis_text = self._get_polygonized_text(text="X", font_size=font_size)
+        y_axis_text = self._get_polygonized_text(text="Y", font_size=font_size)
         
         rotated_text_x = affinity.rotate(x_axis_text, x_degree, use_radians=False)
         rotated_text_y = affinity.rotate(y_axis_text, -y_degree, use_radians=False)
@@ -52,95 +53,57 @@ class AxesVisualizer:
 class Plane2d(AxesVisualizer):
     def __init__(self, origin: np.ndarray, x_axis: np.ndarray, y_axis: np.ndarray, font_size: float = 0.1, normalize: bool = True):
         self.origin = origin
-        self.x_axis = x_axis
-        self.y_axis = y_axis
-        
+        self.x_axis = x_axis / np.linalg.norm(x_axis) if normalize else x_axis
+        self.y_axis = y_axis / np.linalg.norm(y_axis) if normalize else y_axis
         self.font_size = font_size
-        self.normalize = normalize
         
-        if self.normalize:
-            self.x_axis = self.x_axis / np.linalg.norm(self.x_axis)
-            self.y_axis = self.y_axis / np.linalg.norm(self.y_axis)
-        
-        self.x_degree, self.y_degree = self._calculate_axes_angles()
+        self.x_degree, self.y_degree = self._get_axes_degrees()
         self.axes_geometries = self._get_axes_geometries(
             font_size=font_size, x_degree=self.x_degree, y_degree=self.y_degree
         )
 
-    def _calculate_axes_angles(self) -> float:
+    def _get_axes_degrees(self) -> float:
         angle_x_axis = np.arctan2(self.x_axis[1], self.x_axis[0])
         angle_y_axis = np.arctan2(self.y_axis[0], self.y_axis[1])
 
         return np.degrees(angle_x_axis), np.degrees(angle_y_axis)
-        
-    def _get_translation_matrix(self, dx: float, dy: float):
+    
+    def _get_local_coords_matrix(self):
         return np.array(
             [
-                [1, 0, dx],
-                [0, 1, dy],
-                [0, 0, 1]
+                [self.x_axis[0], self.y_axis[0], self.origin[0]],
+                [self.x_axis[1], self.y_axis[1], self.origin[1]],
+                [0, 0, 1],
             ]
         )
         
-    def _get_rotation_matrix(self, degree: float):
+    def get_converted_geometry_by_plane(self, plane_to_convert: Plane2d, geometry_to_convert: GeometryCollection) -> GeometryCollection:
+        
+        matrix_to_map_global_coords = np.linalg.inv(self._get_local_coords_matrix())
+        matrix_to_map_local_coords = matrix_to_map_global_coords @ plane_to_convert._get_local_coords_matrix()
+        matrix_to_map_local_coords_flattened = [
+            matrix_to_map_local_coords[0][0], 
+            matrix_to_map_local_coords[0][1],
+            matrix_to_map_local_coords[1][0], 
+            matrix_to_map_local_coords[1][1],
+            matrix_to_map_local_coords[0][2],
+            matrix_to_map_local_coords[1][2],
+        ]
+    
+        return affinity.affine_transform(geometry_to_convert, matrix_to_map_local_coords_flattened)
+    
+    def get_rotated_plane(self, degree: float):
         cos_angle = np.cos(np.radians(degree))
         sin_angle = np.sin(np.radians(degree))
         
-        return np.array(
+        rotation_matrix = np.array(
             [
                 [cos_angle, sin_angle, 0],
                 [-sin_angle, cos_angle, 0],
                 [0, 0, 1]
             ]
         )
-
-    def _get_reflection_matrix(self, rotation_matrix: np.ndarray, plane_to_convert: Plane2d):
         
-        y_reflection_needed = np.dot(
-            np.dot(rotation_matrix, np.array([*plane_to_convert.y_axis, 0])), np.array([*self.y_axis, 0])
-        ) < 0
-        
-        x_reflection_needed = np.dot(
-            np.dot(rotation_matrix, np.array([*plane_to_convert.x_axis, 0])), np.array([*self.x_axis, 0])
-        ) < 0
-
-        x = -1 if x_reflection_needed else 1 
-        y = -1 if y_reflection_needed else 1 
-        
-        return np.array(
-            [
-                [x, 0, 0],
-                [0, y, 0],
-                [0, 0, 1]
-            ]
-        )
-
-    def _get_transformation_matrix(self, plane_to_convert: Plane2d):
-        
-        rotation_matrix = self._get_rotation_matrix(plane_to_convert.x_degree)
-        translation_matrix = self._get_translation_matrix(*plane_to_convert.origin)        
-        reflection_matrix = self._get_reflection_matrix(rotation_matrix, plane_to_convert)
-        
-        transformation_matrix = translation_matrix @ reflection_matrix @ rotation_matrix
-        
-        return transformation_matrix
-        
-    def get_converted_geometry_by_plane(self, plane_to_convert: Plane2d, geometry_to_convert: GeometryCollection) -> GeometryCollection:
-        
-        transformation_matrix = self._get_transformation_matrix(plane_to_convert)
-        transformation_matrix_flattened = [
-            transformation_matrix[0][0],  # a 
-            transformation_matrix[0][1],  # b
-            transformation_matrix[1][0],  # d 
-            transformation_matrix[1][1],  # e
-            transformation_matrix[0][2],  # xoff
-            transformation_matrix[1][2],  # yoff
-        ]
-    
-        return affinity.affine_transform(geometry_to_convert, transformation_matrix_flattened)
-    
-    def get_rotated_plane(self, degree: float):
-        rotation_matrix = self._get_rotation_matrix(degree)
         rotated_x_axis = np.dot(rotation_matrix, np.array([*self.x_axis, 0]))[:2]
         rotated_y_axis = np.dot(rotation_matrix, np.array([*self.y_axis, 0]))[:2]
         
@@ -194,9 +157,9 @@ if __name__ == "__main__":
     assert (expected_geometry - converted_geometry.buffer(1e-5)).is_empty
     
 
-    plane_to_convert = Plane2d(np.array([0, 0]), np.array([1, 0]), np.array([0, -1]), normalize=True).get_rotated_plane(degree=45)
+    plane_to_convert = Plane2d(np.array([-5, 13]), np.array([1, 0]), np.array([0, -1]), normalize=True).get_rotated_plane(degree=45)
     converted_geometry = plane2d.get_converted_geometry_by_plane(plane_to_convert, polygon)
-    expected_geometry = wkt.loads('POLYGON ((0 -1.4142135623730951, 0.7071067811865476 -2.121320343559643, 0 -2.8284271247461903, -0.7071067811865476 -2.121320343559643, 0 -1.4142135623730951))')
+    expected_geometry = wkt.loads('POLYGON ((-5 11.585786437626904, -4.292893218813452 10.878679656440358, -5 10.17157287525381, -5.707106781186548 10.878679656440358, -5 11.585786437626904))')
     assert (expected_geometry - converted_geometry.buffer(1e-5)).is_empty
     
 
@@ -206,7 +169,7 @@ if __name__ == "__main__":
     assert (expected_geometry - converted_geometry.buffer(1e-5)).is_empty
 
 
-    plane_to_convert = Plane2d(np.array([0, 0]), np.array([1, 0]), np.array([0, 1]), normalize=True).get_rotated_plane(degree=118)
+    plane_to_convert = Plane2d(np.array([10, 10]), np.array([1, 0]), np.array([0, 1]), normalize=True).get_rotated_plane(degree=118)
     converted_geometry = plane2d.get_converted_geometry_by_plane(plane_to_convert, polygon)
-    expected_geometry = wkt.loads('POLYGON ((0.4134760300730362 -1.3524191556448177, -0.0559955327128545 -2.2353667485037447, 0.8269520601460725 -2.7048383112896355, 1.2964236229319632 -1.8218907184307085, 0.4134760300730362 -1.3524191556448177))')
+    expected_geometry = wkt.loads('POLYGON ((10.413476030073037 8.647580844355183, 9.944004467287145 7.764633251496255, 10.826952060146072 7.2951616887103645, 11.296423622931963 8.178109281569292, 10.413476030073037 8.647580844355183))')
     assert (expected_geometry - converted_geometry.buffer(1e-5)).is_empty
