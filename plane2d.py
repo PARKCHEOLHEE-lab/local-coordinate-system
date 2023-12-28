@@ -71,6 +71,14 @@ class Plane2d(AxesVisualizer):
     @property
     def y_axis(self):
         return self._y_axis
+
+    @property
+    def x_degree(self):
+        return np.degrees(np.arctan2(self.x_axis[1], self.x_axis[0]))
+
+    @property
+    def y_degree(self):
+        return np.degrees(np.arctan2(self.y_axis[0], self.y_axis[1]))
         
     @property
     def axes_geometries(self):
@@ -82,14 +90,6 @@ class Plane2d(AxesVisualizer):
             x_degree=self.x_degree, 
             y_degree=self.y_degree
         )
-
-    @property
-    def x_degree(self):
-        return np.degrees(np.arctan2(self.x_axis[1], self.x_axis[0]))
-
-    @property
-    def y_degree(self):
-        return np.degrees(np.arctan2(self.y_axis[0], self.y_axis[1]))
     
     @origin.setter
     def origin(self, value: np.ndarray):
