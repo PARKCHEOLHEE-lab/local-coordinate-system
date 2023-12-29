@@ -19,7 +19,6 @@ class AxesVisualizer:
 
         Args:
             text (str): The text to be polygonized
-            font_size (float, optional): The size of the font for the text. Default is 1.0.
             position (Tuple[float, float], optional): The (x, y) position where the text starts. Default is (0, 0).
 
         Returns:
