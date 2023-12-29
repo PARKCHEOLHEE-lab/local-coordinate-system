@@ -14,7 +14,18 @@ class AxesVisualizer:
     def __init__(self):
         pass
     
-    def _get_polygonized_text(self, text: str, font_size: float = 1.0, position: Tuple[float] = (0, 0)):
+    def _get_polygonized_text(self, text: str, font_size: float = 1.0, position: Tuple[float] = (0, 0)) -> Polygon:
+        """Converts a given text string into a polygon representation of Shapely
+
+        Args:
+            text (str): The text to be polygonized
+            font_size (float, optional): The size of the font for the text. Default is 1.0.
+            position (Tuple[float, float], optional): The (x, y) position where the text starts. Default is (0, 0).
+
+        Returns:
+            Polygon: Polygonized text
+        """
+
         tp = TextPath(position, text, size=font_size)
 
         vertices = tp.to_polygons()
@@ -28,8 +39,28 @@ class AxesVisualizer:
             return polygons[0]
     
     def _get_axes_geometries(
-        self, origin: np.ndarray, x_axis: np.ndarray, y_axis: np.ndarray, font_size: float, x_degree: float, y_degree: float
-    ):
+        self, 
+        origin: np.ndarray, 
+        x_axis: np.ndarray, 
+        y_axis: np.ndarray, 
+        font_size: float, 
+        x_degree: float, 
+        y_degree: float
+    ) -> GeometryCollection:
+        """Generates geometries for the axes including labels and lines
+
+        Args:
+            origin (np.ndarray): The origin point of the axes
+            x_axis (np.ndarray): The vector representing the x-axis
+            y_axis (np.ndarray): The vector representing the y-axis
+            font_size (float): The font size for the axis labels
+            x_degree (float): The rotation degree for the x-axis label
+            y_degree (float): The rotation degree for the y-axis label
+
+        Returns:
+            GeometryCollection: Geometries visualizing the coordinates system
+        """
+        
         origin_text = self._get_polygonized_text(text="O", font_size=font_size)
         origin_text = origin_text - origin_text.buffer(-font_size / 10)
         
@@ -43,12 +74,14 @@ class AxesVisualizer:
         translated_text_x = affinity.translate(rotated_text_x, *(origin + x_axis))
         translated_text_y = affinity.translate(rotated_text_y, *(origin + y_axis))
         
-        return (
-            translated_text_o,
-            translated_text_x,
-            translated_text_y,
-            LineString([origin, origin + x_axis * 0.9]),
-            LineString([origin, origin + y_axis * 0.9]),
+        return GeometryCollection(
+            [
+                translated_text_o,
+                translated_text_x,
+                translated_text_y,
+                LineString([origin, origin + x_axis * 0.9]),
+                LineString([origin, origin + y_axis * 0.9]),
+            ]
         )
     
 
@@ -61,27 +94,27 @@ class Plane2d(AxesVisualizer):
         self.font_size = font_size
         
     @property
-    def origin(self):
+    def origin(self) -> np.ndarray:
         return self._origin
 
     @property
-    def x_axis(self):
+    def x_axis(self) -> np.ndarray:
         return self._x_axis
 
     @property
-    def y_axis(self):
+    def y_axis(self) -> np.ndarray:
         return self._y_axis
 
     @property
-    def x_degree(self):
+    def x_degree(self) -> float:
         return np.degrees(np.arctan2(self.x_axis[1], self.x_axis[0]))
 
     @property
-    def y_degree(self):
+    def y_degree(self) -> float:
         return np.degrees(np.arctan2(self.y_axis[0], self.y_axis[1]))
         
     @property
-    def axes_geometries(self):
+    def axes_geometries(self) -> GeometryCollection:
         return self._get_axes_geometries(
             origin=self.origin, 
             x_axis=self.x_axis, 
@@ -92,18 +125,24 @@ class Plane2d(AxesVisualizer):
         )
     
     @origin.setter
-    def origin(self, value: np.ndarray):
+    def origin(self, value: np.ndarray) -> None:
         self._origin = value
     
     @x_axis.setter
-    def x_axis(self, value: np.ndarray):
+    def x_axis(self, value: np.ndarray) -> None:
         self._x_axis = value
     
     @y_axis.setter
-    def y_axis(self, value: np.ndarray):
+    def y_axis(self, value: np.ndarray) -> None:
         self._y_axis = value
     
-    def _get_local_coords_matrix(self):
+    def _get_local_coords_matrix(self) -> np.ndarray:
+        """Returns a local coordinate matrix expressed in homogeneous coordinates
+
+        Returns:
+            np.ndarray: local coordinates of self
+        """
+        
         return np.array(
             [
                 [self.x_axis[0], self.y_axis[0], self.origin[0]],
@@ -113,6 +152,15 @@ class Plane2d(AxesVisualizer):
         )
         
     def get_converted_geometry_by_plane(self, plane_to_convert: Plane2d, geometry_to_convert: GeometryCollection) -> GeometryCollection:
+        """Converts a given geometry from one plane to another
+
+        Args:
+            plane_to_convert (Plane2d): Target plane to convert the coordinate system
+            geometry_to_convert (GeometryCollection): Geometry of Shapely to convert
+
+        Returns:
+            GeometryCollection: Converted geometry
+        """
         
         matrix_to_map_global_coords = np.linalg.inv(self._get_local_coords_matrix())
         matrix_to_map_local_coords = plane_to_convert._get_local_coords_matrix() @ matrix_to_map_global_coords
@@ -129,7 +177,16 @@ class Plane2d(AxesVisualizer):
             ]
         )
     
-    def get_rotated_plane(self, degree: float):
+    def get_rotated_plane(self, degree: float) -> Plane2d:
+        """Returns a new Plane2d instance that is rotated by a given degree.
+
+        Args:
+            degree (float): Degree to rotate
+
+        Returns:
+            Plane2d: Rotated plane
+        """
+        
         cos_angle = np.cos(np.radians(degree))
         sin_angle = np.sin(np.radians(degree))
         
