@@ -194,7 +194,7 @@ class Plane2d(AxesVisualizer):
             ]
         )
         
-        rotated_x_axis = np.dot(rotation_matrix, np.array([*self.x_axis, 0]))[:2]
-        rotated_y_axis = np.dot(rotation_matrix, np.array([*self.y_axis, 0]))[:2]
+        rotated_x_axis = np.dot(rotation_matrix, self._get_local_coords_matrix()[:, 0])[:2]
+        rotated_y_axis = np.dot(rotation_matrix, self._get_local_coords_matrix()[:, 1])[:2]
         
         return Plane2d(origin=self.origin, x_axis=rotated_x_axis, y_axis=rotated_y_axis)
