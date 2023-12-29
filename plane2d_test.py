@@ -8,7 +8,13 @@ from debugvisualizer.debugvisualizer import Plotter
 
 np.random.seed(0)
 
-def get_random_polygon():
+def get_random_polygon() -> Polygon:
+    """Creates and returns convex polygon randomly
+
+    Returns:
+        Polygon: Random polygon
+    """
+    
     vertices_count = np.random.randint(3, 10)
 
     points = np.random.rand(vertices_count, 2)
@@ -20,6 +26,7 @@ def get_random_polygon():
     points[:, 1] *= scale_y
 
     return Polygon(points).convex_hull
+
 
 if __name__ == "__main__":
 
