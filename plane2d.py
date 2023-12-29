@@ -12,9 +12,9 @@ from debugvisualizer.debugvisualizer import Plotter
 
 class AxesVisualizer:
     def __init__(self):
-        pass
+        self.font_size = 0.1
     
-    def _get_polygonized_text(self, text: str, font_size: float = 1.0, position: Tuple[float] = (0, 0)) -> Polygon:
+    def _get_polygonized_text(self, text: str, position: Tuple[float] = (0, 0)) -> Polygon:
         """Converts a given text string into a polygon representation of Shapely
 
         Args:
@@ -26,7 +26,7 @@ class AxesVisualizer:
             Polygon: Polygonized text
         """
 
-        tp = TextPath(position, text, size=font_size)
+        tp = TextPath(position, text, size=self.font_size)
 
         vertices = tp.to_polygons()
 
@@ -43,7 +43,6 @@ class AxesVisualizer:
         origin: np.ndarray, 
         x_axis: np.ndarray, 
         y_axis: np.ndarray, 
-        font_size: float, 
         x_degree: float, 
         y_degree: float
     ) -> GeometryCollection:
@@ -53,7 +52,6 @@ class AxesVisualizer:
             origin (np.ndarray): The origin point of the axes
             x_axis (np.ndarray): The vector representing the x-axis
             y_axis (np.ndarray): The vector representing the y-axis
-            font_size (float): The font size for the axis labels
             x_degree (float): The rotation degree for the x-axis label
             y_degree (float): The rotation degree for the y-axis label
 
@@ -61,11 +59,11 @@ class AxesVisualizer:
             GeometryCollection: Geometries visualizing the coordinates system
         """
         
-        origin_text = self._get_polygonized_text(text="O", font_size=font_size)
-        origin_text = origin_text - origin_text.buffer(-font_size / 10)
+        origin_text = self._get_polygonized_text(text="O")
+        origin_text = origin_text - origin_text.buffer(-self.font_size / 10)
         
-        x_axis_text = self._get_polygonized_text(text="X", font_size=font_size)
-        y_axis_text = self._get_polygonized_text(text="Y", font_size=font_size)
+        x_axis_text = self._get_polygonized_text(text="X")
+        y_axis_text = self._get_polygonized_text(text="Y")
         
         rotated_text_x = affinity.rotate(x_axis_text, x_degree, use_radians=False)
         rotated_text_y = affinity.rotate(y_axis_text, -y_degree, use_radians=False)
@@ -86,12 +84,12 @@ class AxesVisualizer:
     
 
 class Plane2d(AxesVisualizer):
-    def __init__(self, origin: np.ndarray, x_axis: np.ndarray, y_axis: np.ndarray, font_size: float = 0.1, normalize: bool = True):
+    def __init__(self, origin: np.ndarray, x_axis: np.ndarray, y_axis: np.ndarray, normalize: bool = True):
         self._origin = origin
         self._x_axis = x_axis / np.linalg.norm(x_axis) if normalize else x_axis
         self._y_axis = y_axis / np.linalg.norm(y_axis) if normalize else y_axis
-
-        self.font_size = font_size
+        
+        AxesVisualizer.__init__(self)
         
     @property
     def origin(self) -> np.ndarray:
@@ -119,7 +117,6 @@ class Plane2d(AxesVisualizer):
             origin=self.origin, 
             x_axis=self.x_axis, 
             y_axis=self.y_axis, 
-            font_size=self.font_size, 
             x_degree=self.x_degree, 
             y_degree=self.y_degree
         )
